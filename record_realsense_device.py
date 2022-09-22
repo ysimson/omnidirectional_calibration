@@ -16,9 +16,6 @@ def write_binary_stereo(img_left: np.ndarray, img_right: np.ndarray, bin_filenam
 
 
 if __name__ == "__main__":
-    import sys
-    print(sys.argv)
-
     # Create object for parsing command-line options
     parser = argparse.ArgumentParser(description="")
     # Add argument which takes path to a bag file as an input
@@ -99,6 +96,10 @@ if __name__ == "__main__":
     if args.bin_format:
         bin_folder = os.path.join(output_folder, 'bin')
         os.makedirs(bin_folder, exist_ok=True)
+
+        # For visualizing the images in binary format convert to 8bits
+        vis_folder = os.path.join(output_folder, 'vis')
+        os.makedirs(vis_folder, exist_ok=True)
     else:
         left_cam_folder = os.path.join(output_folder, 'cam0')
         right_cam_folder = os.path.join(output_folder, 'cam1')
@@ -107,8 +108,13 @@ if __name__ == "__main__":
 
     # Start streaming
     profile = pipeline.start(config)
-    #dev.get_info(rs.camera_info.advanced_mode)
-    #device.sensors[0].profiles
+
+    # Get intrinsics
+    # profiles = pipeline.get_active_profile()
+    # streams = {"left": profiles.get_stream(rs.stream.infrared, 1).as_video_stream_profile(),
+    #            "right": profiles.get_stream(rs.stream.infrared, 2).as_video_stream_profile()}
+    # intrinsics = {"left": streams["left"].get_intrinsics(),
+    #               "right": streams["right"].get_intrinsics()}
 
     try:
         while True:
@@ -120,7 +126,10 @@ if __name__ == "__main__":
             f2 = frames.get_infrared_frame(2).as_video_frame()
             right_data = np.asanyarray(f2.get_data())
 
-            images = (np.hstack((left_data, right_data)) / 256).astype(np.uint8)
+            if isinstance(right_data[0, 0], np.uint8):
+                images = np.hstack((left_data, right_data))
+            else:
+                images = (np.hstack((left_data, right_data)) / 256).astype(np.uint8)
 
             # Show images
             cv.namedWindow('RealSense', cv.WINDOW_NORMAL)
@@ -137,11 +146,21 @@ if __name__ == "__main__":
                 bin_idx = frame_index // args.downsample_rate
                 bin_image_filename = os.path.join(bin_folder, f"trackingImage{bin_idx}.bin")
                 write_binary_stereo(left_data, right_data, bin_image_filename)
+
+                images = (np.hstack((left_data, right_data)) // 256).astype(np.uint8)
+                frame_ts_ns = int(1e6 * frame_ts)
+                stereo_filename = os.path.join(vis_folder, f'{frame_ts_ns}.png')
+                cv.imwrite(stereo_filename, images)
             else:
                 frame_ts_ns = int(1e6 * frame_ts)
+
                 left_filename = os.path.join(left_cam_folder, f'{frame_ts_ns}.png')
-                cv.imwrite(left_filename, (left_data / 256).astype(np.uint8))
                 right_filename = os.path.join(right_cam_folder, f'{frame_ts_ns}.png')
-                cv.imwrite(right_filename, (right_data / 256).astype(np.uint8))
+                if isinstance(right_data[0, 0], np.uint8):
+                    cv.imwrite(left_filename, left_data)
+                    cv.imwrite(right_filename, right_data)
+                else:
+                    cv.imwrite(left_filename, (left_data // 256).astype(np.uint8))
+                    cv.imwrite(right_filename, (right_data // 256).astype(np.uint8))
     finally:
         pipeline.stop()

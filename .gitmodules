@@ -1,0 +1,3 @@
+[submodule "apriltags2_ethz"]
+	path = apriltags2_ethz
+	url = https://github.com/safijari/apriltags2_ethz.git
