@@ -24,6 +24,7 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--downsample_rate", type=int, default=1, help="Down-sample output images")
     parser.add_argument("-o", "--output_folder", type=str, help="Path to the output images",
                         default=r"C:\Users\ysimson\work\data\realsense_images")
+    parser.add_argument('-l', '--laser', action='store_true', help='If activated and have two devices activate laser on second device')
 
     # Parse the command line arguments to an object
     args = parser.parse_args()
