@@ -10,19 +10,23 @@ import cv2 as cv
 # from mpl_toolkits.axes_grid1 import make_axes_locatable
 # Use Agg backend for canvas
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+import matplotlib.patches as patches
 
 
 if __name__ == "__main__":
 
-    # deep_depth_dir = r'C:\Users\ysimson\work\data\oskar_data\sid_2022-08-09--17-22-24\DS5D580DepthWhiteWall\Traces\deep'
-    # classic_depth_dir = r'C:\Users\ysimson\work\data\oskar_data\sid_2022-08-09--17-22-24\DS5D580DepthWhiteWall\Traces\6_Depth'
+    movie_code = '20221106_091011'  # '20221102_110324'
+    base_dir = os.path.join(r'C:\Users\ysimson\work\data\realsense_images\Intel_RealSense_D465', movie_code)
 
-    deep_depth_dir = r'C:\Users\ysimson\work\data\realsense_images\Intel_RealSense_D465\20221102_110324\out'
-    classic_depth_dir = r'C:\Users\ysimson\work\data\realsense_images\Intel_RealSense_D465\20221102_110324\bin\Traces\6_Depth'
-    rectified_left_dir = r'C:\Users\ysimson\work\data\realsense_images\Intel_RealSense_D465\20221102_110324\bin\Traces\5_Rectified\Left'
-    rectified_right_dir = r'C:\Users\ysimson\work\data\realsense_images\Intel_RealSense_D465\20221102_110324\bin\Traces\5_Rectified\Right'
+    output_dir = os.path.join(base_dir, 'compare')  # r'C:\Users\ysimson\work\data\realsense_images\Intel_RealSense_D465\20221102_110324\compare'
+    deep_depth_dir = os.path.join(base_dir, 'out')  # r'C:\Users\ysimson\work\data\realsense_images\Intel_RealSense_D465\20221102_110324\out'
+    classic_depth_dir = os.path.join(base_dir, r'bin\Traces\6_Depth')  # r'C:\Users\ysimson\work\data\realsense_images\Intel_RealSense_D465\20221102_110324\bin\Traces\6_Depth'
+    rectified_left_dir = os.path.join(base_dir, r'bin\Traces\5_Rectified\Left')  # r'C:\Users\ysimson\work\data\realsense_images\Intel_RealSense_D465\20221102_110324\bin\Traces\5_Rectified\Left'
+    rectified_right_dir = os.path.join(base_dir, r'bin\Traces\5_Rectified\Right')  # r'C:\Users\ysimson\work\data\realsense_images\Intel_RealSense_D465\20221102_110324\bin\Traces\5_Rectified\Right'
 
-    idx = 1
+    write_video = True
+    show_depth = False
     # open and display classic depth
     classic_depth_files = [os.path.join(classic_depth_dir, x) for x in os.listdir(classic_depth_dir) if '.mat' in x]
     deep_depth_files = [os.path.join(deep_depth_dir, x) for x in os.listdir(deep_depth_dir) if '.mat' in x]
@@ -51,11 +55,13 @@ if __name__ == "__main__":
 
     common_keys = list(set(deep_fn_dict.keys()) & set(classic_fn_dict.keys()) & set(rectified_left_dict.keys()))
     common_keys.sort()
-    video_name = os.path.join(r'C:\Users\ysimson\work\data\realsense_images\Intel_RealSense_D465\20221102_110324', 'video.mp4')
-    video = cv.VideoWriter(video_name, cv.VideoWriter_fourcc(*'mp4v'), 15, (1600, 800))
+    if write_video:
+        os.makedirs(output_dir, exist_ok=True)
+        video_name = os.path.join(output_dir, 'video.mp4')
+        video = cv.VideoWriter(video_name, cv.VideoWriter_fourcc(*'mp4v'), 15, (1600, 800))
 
     for idx in common_keys:
-
+        print(idx)
         results_dict = io.loadmat(classic_fn_dict[idx])
         disparity = results_dict["disparity"]
         confidence_depth = results_dict["confidence_depth"]
@@ -67,8 +73,34 @@ if __name__ == "__main__":
 
         results_deep_dict = io.loadmat(deep_fn_dict[idx])
         deep_disparity = results_deep_dict["disp"]
-        # plt.figure()
-        # plt.imshow(deep_disparity)
+
+        if show_depth:
+            disparity_classic = disparity.copy()
+            disparity_classic[disparity_classic == 0] = np.nan
+            depth = (baseline * focal_length) / disparity_classic
+            depth[confidence_depth < 1] = np.nan
+            depth[depth > 10000] = np.nan
+            # depth = (baseline * focal_length) / deep_disparity  # <-- deep
+            fig, axes = plt.subplots(1, 2, figsize=(16, 8))
+            im = axes[0].imshow(depth)
+            divider = make_axes_locatable(axes[0])
+            cax = divider.append_axes("right", size="5%", pad=0.05)
+            plt.colorbar(im, cax=cax)
+
+            x1 = 585
+            x2 = 620
+            y1 = 375
+            y2 = 405
+            # Create a Rectangle patch, add the patch to the Axes
+            rect = patches.Rectangle((x1, y1), x2 - x1, y2 - y1, linewidth=1, edgecolor='r', facecolor='none')
+            axes[0].add_patch(rect)
+
+            im = axes[1].imshow(depth[375:400, 585:620], cmap='inferno')
+            divider = make_axes_locatable(axes[1])
+            cax = divider.append_axes("right", size="5%", pad=0.05)
+            plt.colorbar(im, cax=cax)
+            plt.tight_layout()
+
         rectified_left_img = cv.imread(rectified_left_dict[idx], cv.IMREAD_UNCHANGED)
 
         fig, axes = plt.subplots(2, 2, sharex=True, sharey=True, figsize=(16, 8))
@@ -80,7 +112,7 @@ if __name__ == "__main__":
         axes[0, 1].set_title("Disparity deep")
         plt.colorbar(im1, ax=axes[0, 1])
 
-        im2 = axes[1, 0].imshow(rectified_left_img)
+        im2 = axes[1, 0].imshow(rectified_left_img, cmap='gray')
         axes[1, 0].set_title("Rectified left")
 
         disparity_diff = deep_disparity - disparity
@@ -91,15 +123,19 @@ if __name__ == "__main__":
 
         plt.tight_layout()
 
+        plt.savefig(os.path.join(output_dir, f'debug_{idx:04d}.png'))
+
         canvas = FigureCanvas(fig)
         canvas.draw()
         mat = np.array(canvas.renderer._renderer)
         mat = cv.cvtColor(mat, cv.COLOR_RGB2BGR)
 
         # write frame to video
-        video.write(mat)
+        if write_video:
+            video.write(mat)
         plt.close()
 
-    video.release()
+    if write_video:
+        video.release()
     plt.show()
     print("Done")
