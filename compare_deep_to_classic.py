@@ -16,7 +16,7 @@ import matplotlib.patches as patches
 
 if __name__ == "__main__":
 
-    movie_code = '20221106_091011'  # '20221102_110324'
+    movie_code = '20221107_122044'  # '20221106_091011'  # '20221102_110324'
     base_dir = os.path.join(r'C:\Users\ysimson\work\data\realsense_images\Intel_RealSense_D465', movie_code)
 
     output_dir = os.path.join(base_dir, 'compare')  # r'C:\Users\ysimson\work\data\realsense_images\Intel_RealSense_D465\20221102_110324\compare'
@@ -26,7 +26,8 @@ if __name__ == "__main__":
     rectified_right_dir = os.path.join(base_dir, r'bin\Traces\5_Rectified\Right')  # r'C:\Users\ysimson\work\data\realsense_images\Intel_RealSense_D465\20221102_110324\bin\Traces\5_Rectified\Right'
 
     write_video = True
-    show_depth = False
+    show_depth = True
+    focus_on = True
     # open and display classic depth
     classic_depth_files = [os.path.join(classic_depth_dir, x) for x in os.listdir(classic_depth_dir) if '.mat' in x]
     deep_depth_files = [os.path.join(deep_depth_dir, x) for x in os.listdir(deep_depth_dir) if '.mat' in x]
@@ -68,9 +69,6 @@ if __name__ == "__main__":
         baseline = results_dict["baseline"]
         focal_length = results_dict["focal_length"]
 
-        # plt.figure()
-        # plt.imshow(disparity)
-
         results_deep_dict = io.loadmat(deep_fn_dict[idx])
         deep_disparity = results_deep_dict["disp"]
 
@@ -80,25 +78,46 @@ if __name__ == "__main__":
             depth = (baseline * focal_length) / disparity_classic
             depth[confidence_depth < 1] = np.nan
             depth[depth > 10000] = np.nan
-            # depth = (baseline * focal_length) / deep_disparity  # <-- deep
-            fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-            im = axes[0].imshow(depth)
-            divider = make_axes_locatable(axes[0])
+            depth_dict = {"classic": depth}
+            depth = (baseline * focal_length) / deep_disparity  # <-- deep
+            depth_dict["deep"] = depth
+
+            fig, axes = plt.subplots(2, 2, figsize=(12, 12))
+            im = axes[0, 0].imshow(depth_dict["classic"])
+            divider = make_axes_locatable(axes[0, 0])
             cax = divider.append_axes("right", size="5%", pad=0.05)
             plt.colorbar(im, cax=cax)
+            axes[0, 0].set_title('Classic')
 
             x1 = 585
             x2 = 620
-            y1 = 375
-            y2 = 405
+            y1 = 330
+            y2 = 370
             # Create a Rectangle patch, add the patch to the Axes
             rect = patches.Rectangle((x1, y1), x2 - x1, y2 - y1, linewidth=1, edgecolor='r', facecolor='none')
-            axes[0].add_patch(rect)
+            axes[0, 0].add_patch(rect)
 
-            im = axes[1].imshow(depth[375:400, 585:620], cmap='inferno')
-            divider = make_axes_locatable(axes[1])
+            im = axes[1, 0].imshow(depth_dict["classic"][y1:y2, x1:x2], cmap='inferno')
+            divider = make_axes_locatable(axes[1, 0])
             cax = divider.append_axes("right", size="5%", pad=0.05)
             plt.colorbar(im, cax=cax)
+
+            # Deep
+            im = axes[0, 1].imshow(depth_dict["deep"])
+            divider = make_axes_locatable(axes[0, 1])
+            cax = divider.append_axes("right", size="5%", pad=0.05)
+            plt.colorbar(im, cax=cax)
+            axes[0, 1].set_title('Deep')
+
+            # Create a Rectangle patch, add the patch to the Axes
+            rect = patches.Rectangle((x1, y1), x2 - x1, y2 - y1, linewidth=1, edgecolor='r', facecolor='none')
+            axes[0, 1].add_patch(rect)
+
+            im = axes[1, 1].imshow(depth_dict["deep"][y1:y2, x1:x2], cmap='inferno')
+            divider = make_axes_locatable(axes[1, 1])
+            cax = divider.append_axes("right", size="5%", pad=0.05)
+            plt.colorbar(im, cax=cax)
+
             plt.tight_layout()
 
         rectified_left_img = cv.imread(rectified_left_dict[idx], cv.IMREAD_UNCHANGED)
@@ -122,8 +141,33 @@ if __name__ == "__main__":
         plt.colorbar(im3, ax=axes[1, 1])
 
         plt.tight_layout()
+        plt.savefig(os.path.join(output_dir, f'disparity_{idx:04d}.png'))
 
-        plt.savefig(os.path.join(output_dir, f'debug_{idx:04d}.png'))
+        if focus_on and show_depth:
+            x1 = 570
+            x2 = 740
+            y1 = 390
+            y2 = 470
+            fig, axes = plt.subplots(2, 2, sharex=True, sharey=True, figsize=(16, 8))
+            im0 = axes[0, 0].imshow(depth_dict["classic"][y1:y2, x1:x2])
+            axes[0, 0].set_title("Depth classic")
+            plt.colorbar(im0, ax=axes[0, 0])
+
+            im1 = axes[0, 1].imshow(depth_dict["deep"][y1:y2, x1:x2])
+            axes[0, 1].set_title("Depth deep")
+            plt.colorbar(im1, ax=axes[0, 1])
+
+            im2 = axes[1, 0].imshow(rectified_left_img[y1:y2, x1:x2], cmap='gray')
+            axes[1, 0].set_title("Rectified left")
+
+            depth_diff = depth_dict["deep"] - depth_dict["classic"]
+            im3 = axes[1, 1].imshow(depth_diff[y1:y2, x1:x2])
+            axes[1, 1].set_title("deep depth - classic deep")
+
+            plt.colorbar(im3, ax=axes[1, 1])
+            plt.tight_layout()
+
+        plt.savefig(os.path.join(output_dir, f'focus_depth_{idx:04d}.png'))
 
         canvas = FigureCanvas(fig)
         canvas.draw()
