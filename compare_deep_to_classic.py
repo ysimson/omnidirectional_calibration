@@ -14,9 +14,20 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.patches as patches
 
 
+def convert_depth_to_display(disp: np.ndarray):
+    """
+
+    """
+    disp_vis = (disp - disp.min()) / (disp.max() - disp.min()) * 255.0
+    disp_vis = disp_vis.astype("uint8")
+    disp_vis = cv.applyColorMap(disp_vis, cv.COLORMAP_INFERNO)
+
+    return disp_vis
+
+
 if __name__ == "__main__":
 
-    movie_code = '20221107_122044'  # '20221106_091011'  # '20221102_110324'
+    movie_code = '20221117_054212'   # '20221031_144401'  # '20221102_105639' # '20221107_122055'  # '20221107_122044'  # '20221106_091011'  # '20221102_110324' 20221102_105639
     base_dir = os.path.join(r'C:\Users\ysimson\work\data\realsense_images\Intel_RealSense_D465', movie_code)
 
     output_dir = os.path.join(base_dir, 'compare')  # r'C:\Users\ysimson\work\data\realsense_images\Intel_RealSense_D465\20221102_110324\compare'
@@ -27,7 +38,8 @@ if __name__ == "__main__":
 
     write_video = True
     show_depth = True
-    focus_on = True
+    focus_on = False
+    rectangle = False
     # open and display classic depth
     classic_depth_files = [os.path.join(classic_depth_dir, x) for x in os.listdir(classic_depth_dir) if '.mat' in x]
     deep_depth_files = [os.path.join(deep_depth_dir, x) for x in os.listdir(deep_depth_dir) if '.mat' in x]
@@ -59,7 +71,7 @@ if __name__ == "__main__":
     if write_video:
         os.makedirs(output_dir, exist_ok=True)
         video_name = os.path.join(output_dir, 'video.mp4')
-        video = cv.VideoWriter(video_name, cv.VideoWriter_fourcc(*'mp4v'), 15, (1600, 800))
+        video = cv.VideoWriter(video_name, cv.VideoWriter_fourcc(*'mp4v'), 15, (1280, 720))
 
     for idx in common_keys:
         print(idx)
@@ -82,6 +94,9 @@ if __name__ == "__main__":
             depth = (baseline * focal_length) / deep_disparity  # <-- deep
             depth_dict["deep"] = depth
 
+            # invalid = depth_dict["classic"] > 2000
+            # depth_dict["classic"][invalid] = np.nan
+
             fig, axes = plt.subplots(2, 2, figsize=(12, 12))
             im = axes[0, 0].imshow(depth_dict["classic"])
             divider = make_axes_locatable(axes[0, 0])
@@ -94,8 +109,9 @@ if __name__ == "__main__":
             y1 = 330
             y2 = 370
             # Create a Rectangle patch, add the patch to the Axes
-            rect = patches.Rectangle((x1, y1), x2 - x1, y2 - y1, linewidth=1, edgecolor='r', facecolor='none')
-            axes[0, 0].add_patch(rect)
+            if rectangle:
+                rect = patches.Rectangle((x1, y1), x2 - x1, y2 - y1, linewidth=1, edgecolor='r', facecolor='none')
+                axes[0, 0].add_patch(rect)
 
             im = axes[1, 0].imshow(depth_dict["classic"][y1:y2, x1:x2], cmap='inferno')
             divider = make_axes_locatable(axes[1, 0])
@@ -110,8 +126,9 @@ if __name__ == "__main__":
             axes[0, 1].set_title('Deep')
 
             # Create a Rectangle patch, add the patch to the Axes
-            rect = patches.Rectangle((x1, y1), x2 - x1, y2 - y1, linewidth=1, edgecolor='r', facecolor='none')
-            axes[0, 1].add_patch(rect)
+            if rectangle:
+                rect = patches.Rectangle((x1, y1), x2 - x1, y2 - y1, linewidth=1, edgecolor='r', facecolor='none')
+                axes[0, 1].add_patch(rect)
 
             im = axes[1, 1].imshow(depth_dict["deep"][y1:y2, x1:x2], cmap='inferno')
             divider = make_axes_locatable(axes[1, 1])
@@ -119,6 +136,13 @@ if __name__ == "__main__":
             plt.colorbar(im, cax=cax)
 
             plt.tight_layout()
+            plt.savefig(os.path.join(output_dir, f"depth_debug_{idx:04d}.png"))
+
+            depth_dict["classic"][np.isnan(depth_dict["classic"])] = 0.
+            cv.imwrite(os.path.join(output_dir, f"classic_depth_{idx:04d}.tiff"), (depth_dict["classic"]).astype(np.uint16))
+            cv.imwrite(os.path.join(output_dir, f"deep_depth_{idx:04d}.tiff"), (depth_dict["deep"]).astype(np.uint16))
+
+            disp_vis = convert_depth_to_display(deep_disparity)
 
         rectified_left_img = cv.imread(rectified_left_dict[idx], cv.IMREAD_UNCHANGED)
 
@@ -167,7 +191,7 @@ if __name__ == "__main__":
             plt.colorbar(im3, ax=axes[1, 1])
             plt.tight_layout()
 
-        plt.savefig(os.path.join(output_dir, f'focus_depth_{idx:04d}.png'))
+            plt.savefig(os.path.join(output_dir, f'focus_depth_{idx:04d}.png'))
 
         canvas = FigureCanvas(fig)
         canvas.draw()
@@ -176,8 +200,8 @@ if __name__ == "__main__":
 
         # write frame to video
         if write_video:
-            video.write(mat)
-        plt.close()
+            video.write(disp_vis)   #(mat)
+        plt.close("all")
 
     if write_video:
         video.release()
