@@ -31,7 +31,7 @@ if __name__ == "__main__":
     cax = divider.append_axes("right", size="5%", pad=0.05)
     plt.colorbar(im, cax=cax)
 
-    err_image = gdc_disp.astype(np.int16) - rs_disp.astype(np.int16)
+    err_image = gdc_disp - rs_disp
     err_image_sub5 = err_image.copy()
     err_image_sub5[np.abs(err_image_sub5) >= 5] = 0
     im = axes[1, 0].imshow(err_image_sub5)
